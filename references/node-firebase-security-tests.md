@@ -59,29 +59,21 @@ firebase emulators:exec --only firestore "npm run test:rules"
 - Confirm App Check is enabled in Firebase Console for production.
 - Service account JSON must **not** be in the client bundle or git.
 
-## Automated Gate (example script snippet)
+## Automated Gate
+
+Use the bundled gate instead of copying snippets. The grep one-liners above are
+for quick manual checks only; `grep -v ".git"` in particular drops any line that
+contains `.github` or `digit` and can hide real findings.
 
 ```bash
-#!/bin/bash
-set -e
-echo "=== Node security ==="
-npm ci --ignore-scripts
-npm audit --audit-level=moderate || true   # warn only if you prefer
-
-echo "=== Secrets check ==="
-if grep -rE "serviceAccount|private_key" --include="*.json" . | grep -v node_modules; then
-  echo "❌ Possible secret in repo"
-  exit 1
-fi
-
-echo "=== Firebase rules ==="
-if grep -q "if true" firestore.rules 2>/dev/null; then
-  echo "❌ Open Firestore rules"
-  exit 1
-fi
-
-echo "✅ Basic security checks passed"
+bash scripts/security-gate.sh path/to/project      # exit 1 = blocked
+AUDIT_BLOCKING=1 bash scripts/security-gate.sh .    # also block on npm audit
 ```
+
+It runs the frozen install, audit, credential scan, `.env` check and Firebase
+rules check, and prints one `PASS|FAIL|WARN|SKIP <check>: ...` line per result
+(secret values are never printed). `evals/run_tests.py` runs it against fixture
+projects with known problems to prove each check fires.
 
 ## What “pass” means
 

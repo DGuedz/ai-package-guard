@@ -72,9 +72,23 @@ Use the bundled script for batch checks:
 
 ```bash
 python scripts/verify_packages.py package1 package2 package3
+python scripts/verify_packages.py --ecosystem pypi requests some-ai-suggestion
 ```
 
-It queries the npm registry and flags packages younger than 30 days or missing repository info.
+It queries npm (or PyPI) and returns `high` if the package does not exist, `medium` if it is younger than 30 days, lists no repository, or is one edit away from a popular name (typosquat), and `unknown` if the registry could not be reached. Exit 0 = all low, 2 = review needed, 3 = not verified. Treat `unknown` as not verified, never as safe.
+
+For a PR that changes the lockfile:
+
+```bash
+git show origin/main:package-lock.json > /tmp/base-lock.json
+python scripts/lockfile_diff.py /tmp/base-lock.json package-lock.json
+```
+
+Before release, run the gate on the project (exit 1 blocks):
+
+```bash
+bash scripts/security-gate.sh path/to/project
+```
 
 ## Other Ecosystems (brief)
 
