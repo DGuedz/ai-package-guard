@@ -7,6 +7,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   test:
     name: Run skill tests
@@ -20,12 +23,24 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Set up Node (npm is used by the security gate tests)
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Lint gate script
+        run: shellcheck scripts/security-gate.sh
+
+      # Builds throwaway fixture projects (clean, leaked secrets, open Firebase
+      # rules, missing lockfile, .env not ignored) and asserts the gate result
+      # for each one, plus registry, typosquat and lockfile-diff tests.
+      # Writes evals/test-report.json and the job summary.
       - name: Run test suite
         run: python evals/run_tests.py
 
-      - name: Run security gate (if Node project)
+      - name: Run security gate on this repo (only if it is a Node project)
         if: hashFiles('package.json') != ''
-        run: bash scripts/security-gate.sh
+        run: bash scripts/security-gate.sh .
 
       - name: Upload test report
         if: always()
@@ -34,22 +49,3 @@ jobs:
           name: test-report
           path: evals/test-report.json
           retention-days: 30
-
-      - name: Test summary
-        if: always()
-        run: |
-          echo "### Skill Test Results" >> $GITHUB_STEP_SUMMARY
-          if [ -f evals/test-report.json ]; then
-            python -c "
-          import json
-          with open('evals/test-report.json') as f:
-              r = json.load(f)
-          s = r['summary']
-          print(f'- Passed: {s[\"passed\"]}/{s[\"total\"]}')
-          print(f'- Success: {s[\"success\"]}')
-          print(f'- Started: {r[\"started_at\"]}')
-          print(f'- Finished: {s[\"finished_at\"]}')
-          " >> $GITHUB_STEP_SUMMARY
-          else
-            echo "No report generated" >> $GITHUB_STEP_SUMMARY
-          fi
