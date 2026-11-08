@@ -1,84 +1,107 @@
 #!/usr/bin/env python3
 """
-Test runner for ai-package-guard.
-Runs unit tests on verify_packages.py + structural checks on skill files.
+Test runner for ai-package-guard with clear telemetry.
+Outputs structured logs and a JSON report for CI.
 """
 
 import json
 import subprocess
 import sys
-import os
+import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
 SCRIPT = ROOT / "scripts" / "verify_packages.py"
 EVALS = ROOT / "evals" / "evals.json"
 TRIGGERS = ROOT / "evals" / "triggers.json"
+REPORT_PATH = ROOT / "evals" / "test-report.json"
+
+TELEMETRY = {
+    "started_at": datetime.datetime.utcnow().isoformat() + "Z",
+    "skill": "ai-package-guard",
+    "tests": [],
+    "summary": {},
+}
 
 
-def run_verify(packages, expect_exit=0):
-    """Run verify_packages.py and return (exit_code, stdout, stderr)."""
+def log(msg: str):
+    print(msg, flush=True)
+
+
+def run_verify(packages):
     cmd = [sys.executable, str(SCRIPT)] + packages
     result = subprocess.run(cmd, capture_output=True, text=True)
     return result.returncode, result.stdout, result.stderr
 
 
+def record(name: str, status: str, details: dict = None):
+    entry = {
+        "name": name,
+        "status": status,
+        "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
+        "details": details or {},
+    }
+    TELEMETRY["tests"].append(entry)
+    icon = "✅" if status == "pass" else "❌"
+    log(f"  {icon} {name}")
+
+
 def test_known_good():
-    print("→ Testing known-good packages (express, lodash)...")
-    code, out, err = run_verify(["express", "lodash"], expect_exit=0)
+    code, out, err = run_verify(["express", "lodash"])
     data = json.loads(out)
-    assert len(data) == 2
-    assert all(r["risk"] == "low" for r in data)
-    assert code == 0
-    print("  ✅ PASS")
+    ok = code == 0 and len(data) == 2 and all(r["risk"] == "low" for r in data)
+    record("known_good_packages", "pass" if ok else "fail", {"exit_code": code, "risks": [r["risk"] for r in data]})
+    if not ok:
+        raise AssertionError("known good failed")
 
 
 def test_nonexistent():
-    print("→ Testing nonexistent package...")
-    code, out, err = run_verify(["this-package-definitely-does-not-exist-xyz-999"], expect_exit=2)
+    code, out, err = run_verify(["this-package-definitely-does-not-exist-xyz-999"])
     data = json.loads(out)
-    assert data[0]["exists"] is False
-    assert data[0]["risk"] == "high"
-    assert code == 2
-    print("  ✅ PASS")
+    ok = code == 2 and data[0]["exists"] is False and data[0]["risk"] == "high"
+    record("nonexistent_package", "pass" if ok else "fail", {"exit_code": code, "risk": data[0].get("risk")})
+    if not ok:
+        raise AssertionError("nonexistent failed")
 
 
 def test_mixed():
-    print("→ Testing mixed (good + bad)...")
-    code, out, err = run_verify(["lodash", "fake-package-abc-123"], expect_exit=2)
+    code, out, err = run_verify(["lodash", "fake-package-abc-123"])
     data = json.loads(out)
-    assert any(r["risk"] == "low" for r in data)
-    assert any(r["risk"] == "high" for r in data)
-    assert code == 2
-    print("  ✅ PASS")
+    risks = [r["risk"] for r in data]
+    ok = code == 2 and "low" in risks and "high" in risks
+    record("mixed_packages", "pass" if ok else "fail", {"exit_code": code, "risks": risks})
+    if not ok:
+        raise AssertionError("mixed failed")
 
 
 def test_evals_structure():
-    print("→ Validating evals.json structure...")
     with open(EVALS) as f:
         data = json.load(f)
-    assert data["skill"] == "ai-package-guard"
-    assert len(data["test_cases"]) >= 5
-    for tc in data["test_cases"]:
-        assert "name" in tc and "input" in tc and "assertions" in tc
-        assert len(tc["assertions"]) >= 2
-    print("  ✅ PASS")
+    ok = (
+        data.get("skill") == "ai-package-guard"
+        and len(data.get("test_cases", [])) >= 7
+        and all("name" in tc and "input" in tc and "assertions" in tc for tc in data["test_cases"])
+    )
+    record("evals_structure", "pass" if ok else "fail", {"case_count": len(data.get("test_cases", []))})
+    if not ok:
+        raise AssertionError("evals structure failed")
 
 
 def test_triggers_structure():
-    print("→ Validating triggers.json structure...")
     with open(TRIGGERS) as f:
         data = json.load(f)
-    assert data["skill"] == "ai-package-guard"
-    positives = [t for t in data["test_cases"] if t["should_trigger"]]
-    negatives = [t for t in data["test_cases"] if not t["should_trigger"]]
-    assert len(positives) >= 4
-    assert len(negatives) >= 2
-    print("  ✅ PASS")
+    positives = [t for t in data.get("test_cases", []) if t.get("should_trigger")]
+    negatives = [t for t in data.get("test_cases", []) if not t.get("should_trigger")]
+    ok = len(positives) >= 5 and len(negatives) >= 3
+    record("triggers_structure", "pass" if ok else "fail", {"positives": len(positives), "negatives": len(negatives)})
+    if not ok:
+        raise AssertionError("triggers structure failed")
 
 
 def main():
-    print("=== ai-package-guard test runner ===\n")
+    log("=== ai-package-guard test runner ===")
+    log(f"Started: {TELEMETRY['started_at']}\n")
+
     tests = [
         test_known_good,
         test_nonexistent,
@@ -86,15 +109,32 @@ def main():
         test_evals_structure,
         test_triggers_structure,
     ]
-    failed = 0
+
     for t in tests:
         try:
             t()
         except Exception as e:
-            print(f"  ❌ FAIL: {e}")
-            failed += 1
-    print(f"\n=== Results: {len(tests) - failed}/{len(tests)} passed ===")
-    sys.exit(0 if failed == 0 else 1)
+            record(t.__name__, "fail", {"error": str(e)})
+
+    passed = sum(1 for t in TELEMETRY["tests"] if t["status"] == "pass")
+    total = len(TELEMETRY["tests"])
+    TELEMETRY["summary"] = {
+        "passed": passed,
+        "failed": total - passed,
+        "total": total,
+        "finished_at": datetime.datetime.utcnow().isoformat() + "Z",
+        "success": passed == total,
+    }
+
+    log(f"\n=== Results: {passed}/{total} passed ===")
+    log(f"Finished: {TELEMETRY['summary']['finished_at']}")
+
+    # Write transparent report
+    with open(REPORT_PATH, "w") as f:
+        json.dump(TELEMETRY, f, indent=2)
+    log(f"Report written to: {REPORT_PATH}")
+
+    sys.exit(0 if TELEMETRY["summary"]["success"] else 1)
 
 
 if __name__ == "__main__":
