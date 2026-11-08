@@ -1,0 +1,25 @@
+{
+  "skill": "ai-package-guard",
+  "test_cases": [
+    {
+      "input": "AI suggested a package that doesn't exist, how do I protect my build?",
+      "should_trigger": true
+    },
+    {
+      "input": "Set up secure npm ci and confirm exactly what gets installed",
+      "should_trigger": true
+    },
+    {
+      "input": "Prevent slopsquatting / package hallucination in my CI",
+      "should_trigger": true
+    },
+    {
+      "input": "What's the weather today?",
+      "should_trigger": false
+    },
+    {
+      "input": "Write a React component for a button",
+      "should_trigger": false
+    }
+  ]
+}
