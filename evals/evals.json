@@ -94,6 +94,35 @@
         "Explains SBOM confirms exact delivered dependencies",
         "Suggests storing or comparing the SBOM in CI"
       ]
+    },
+    {
+      "name": "firebase_vibe_coding",
+      "input": "I'm vibe coding a Firebase + Node app with Claude. What security checklist should I follow before going live?",
+      "assertions": [
+        "References vibe-coding-checklist or equivalent",
+        "Covers Firebase Security Rules",
+        "Covers secrets/keys management",
+        "Mentions dependency verification / ai-package-guard",
+        "Includes recurring security testing"
+      ]
+    },
+    {
+      "name": "secrets_in_repo",
+      "input": "Claude put my Firebase service account JSON in the source code. Is that ok?",
+      "assertions": [
+        "Explicitly rejects secrets in source",
+        "Recommends .gitignore and environment variables",
+        "Warns about key exposure"
+      ]
+    },
+    {
+      "name": "open_firebase_rules",
+      "input": "AI generated Firestore rules with allow read, write: if true. Ship it?",
+      "assertions": [
+        "Rejects open rules for production",
+        "Requires authentication and tested rules",
+        "Points to security checklist"
+      ]
     }
   ]
 }
