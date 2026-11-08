@@ -23,6 +23,10 @@ jobs:
       - name: Run test suite
         run: python evals/run_tests.py
 
+      - name: Run security gate (if Node project)
+        if: hashFiles('package.json') != ''
+        run: bash scripts/security-gate.sh
+
       - name: Upload test report
         if: always()
         uses: actions/upload-artifact@v4
