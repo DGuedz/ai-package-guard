@@ -64,7 +64,7 @@ Follow these steps in order for any new or AI-suggested dependency:
      ```
    - Optionally run `npm audit` and a tool like Socket if available
 
-See `references/verification-checklist.md` for the full checklist and `references/ci-examples.md` for ready-to-use GitHub Actions / scripts.
+See `references/verification-checklist.md` for the full checklist, `references/ci-examples.md` for ready-to-use GitHub Actions / scripts, and `references/vibe-coding-checklist.md` for the complete Claude/Codex + Firebase + Node security process (crosses mentor advice with this skill).
 
 ## Quick Verification Script
 
