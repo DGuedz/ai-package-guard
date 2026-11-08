@@ -188,6 +188,56 @@ def test_offline_registry_error_is_not_verified():
     return {"risk": r["risk"], "exit_code": code}
 
 
+@test("offline")
+def test_offline_registry_retries_transient_errors():
+    import urllib.error
+    import urllib.request
+
+    class Resp:
+        def __init__(self, body):
+            self.body = body
+        def read(self):
+            return self.body
+        def __enter__(self):
+            return self
+        def __exit__(self, *a):
+            return False
+
+    def http_error(code):
+        return urllib.error.HTTPError("u", code, "x", {}, None)
+
+    def run_with(script):
+        calls = []
+        old_open, old_delay = urllib.request.urlopen, vp.RETRY_DELAY_S
+
+        def fake(req, timeout=None):
+            calls.append(1)
+            step = script[min(len(calls), len(script)) - 1]
+            if isinstance(step, Exception):
+                raise step
+            return Resp(step)
+
+        urllib.request.urlopen, vp.RETRY_DELAY_S = fake, 0
+        try:
+            try:
+                return vp._get_json("https://registry.example/x"), len(calls)
+            except Exception as e:
+                return e, len(calls)
+        finally:
+            urllib.request.urlopen, vp.RETRY_DELAY_S = old_open, old_delay
+
+    ok = json.dumps({"name": "x"}).encode()
+    got, n = run_with([urllib.error.URLError("reset"), http_error(503), ok])
+    check(got == {"name": "x"} and n == 3, "two transient failures then success must succeed", calls=n)
+    got, n = run_with([http_error(404)])
+    check(isinstance(got, vp.NotFound) and n == 1, "404 must not be retried", calls=n)
+    got, n = run_with([http_error(403)])
+    check(isinstance(got, urllib.error.HTTPError) and n == 1, "non-transient errors must not be retried", calls=n)
+    got, n = run_with([http_error(500)] * 5)
+    check(isinstance(got, urllib.error.HTTPError) and n == vp.RETRIES + 1, "retries must be bounded", calls=n)
+    return {"max_attempts": vp.RETRIES + 1}
+
+
 # --------------------------------------------------------------------------- lockfile diff (offline)
 
 def _lock(packages):

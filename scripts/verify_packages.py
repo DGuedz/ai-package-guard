@@ -21,6 +21,7 @@ import argparse
 import datetime
 import json
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -28,6 +29,8 @@ from typing import Any, Dict, List, Optional
 
 AGE_THRESHOLD_DAYS = 30
 USER_AGENT = "ai-package-guard/1.1 (+https://github.com/DGuedz/ai-package-guard)"
+RETRIES = 2          # extra attempts after the first one, for transient failures only
+RETRY_DELAY_S = 1.0  # doubled on each retry
 
 # Well-known names used to spot look-alikes. A candidate that is exactly one of
 # these is fine; a candidate one edit away from one of these is flagged.
@@ -62,15 +65,31 @@ class NotFound(Exception):
     pass
 
 
+def _transient(e: Exception) -> bool:
+    if isinstance(e, urllib.error.HTTPError):
+        return e.code == 429 or e.code >= 500
+    return isinstance(e, (urllib.error.URLError, TimeoutError, ConnectionError))
+
+
 def _get_json(url: str) -> Dict[str, Any]:
+    """GET JSON. 404 -> NotFound at once; 429/5xx/network errors are retried, then re-raised."""
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "application/json"})
-    try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            return json.loads(resp.read().decode())
-    except urllib.error.HTTPError as e:
-        if e.code == 404:
-            raise NotFound(url)
-        raise
+    delay = RETRY_DELAY_S
+    for attempt in range(RETRIES + 1):
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                return json.loads(resp.read().decode())
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                raise NotFound(url)
+            if attempt == RETRIES or not _transient(e):
+                raise
+        except Exception as e:
+            if attempt == RETRIES or not _transient(e):
+                raise
+        time.sleep(delay)
+        delay *= 2
+    raise RuntimeError("unreachable")
 
 
 def fetch_npm(name: str) -> Dict[str, Any]:
