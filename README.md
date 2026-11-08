@@ -1,37 +1,28 @@
 # ai-package-guard
 
-Skill para Claude, Codex e outros agentes de IA que protege builds contra **alucinação de pacotes** (slopsquatting) e garante que você sempre confirma exatamente o que está sendo entregue.
+**Problema:** IAs alucinam nomes de pacotes. Atacantes registram esses nomes e colocam malware. O desenvolvedor instala achando que é legítimo. No vibe coding com Firebase + Node isso se agrava: rules abertas, segredos no git e instalação cega por agentes.
 
-## O que faz
+**Solução:** Skill que força verificação antes de qualquer instalação, lockfile congelado, SBOM, checklist de segurança para Firebase/Node e gate automático.
 
-- Impede instalação direta de pacotes sugeridos por IA
-- Força verificação no registry (idade, repositório, maintainer)
-- Exige lockfile + `npm ci --ignore-scripts` no CI
-- Gera/confirma SBOM
-- Inclui script de verificação em lote
+## O que ela faz
+- Rejeita pacotes inexistentes ou muito novos
+- Exige confirmação humana
+- `npm ci --ignore-scripts` + SBOM no CI
+- Checklist de rules, segredos e testes recorrentes
+- Script `security-gate.sh` + testes automatizados
 
-## Como usar
+## Prova
+- 15 casos de teste em `evals/`
+- Runner gera `test-report.json` com timestamp
+- GitHub Action roda em todo push
+- Commits rastreáveis (ex.: security-gate `a8b547b`, workflow `a4a4595`)
 
-1. Clone ou copie a pasta para o diretório de skills do seu agente:
-   ```bash
-   git clone https://github.com/DGuedz/ai-package-guard.git
-   # ou copie a pasta para ~/.claude/skills/ ou equivalente
-   ```
-2. A skill ativa automaticamente quando o contexto envolve dependências, builds seguros ou pacotes sugeridos por IA.
-
-## Script de verificação
-
+## Uso rápido
 ```bash
-python scripts/verify_packages.py express lodash some-package
+git clone https://github.com/DGuedz/ai-package-guard.git
+python evals/run_tests.py
+bash scripts/security-gate.sh   # em projeto Node
 ```
 
-## Estrutura
-
-- `SKILL.md` — instruções principais da skill
-- `scripts/verify_packages.py` — verifica pacotes no npm
-- `references/` — checklist e exemplos de CI
-- `evals/` — casos de teste
-
----
-
-Criado para uso em ambientes Claude e Codex.
+Skill para Claude, Codex e agentes.  
+Processo completo em `references/vibe-coding-checklist.md`.
