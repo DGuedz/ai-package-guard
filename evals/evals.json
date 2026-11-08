@@ -123,6 +123,26 @@
         "Requires authentication and tested rules",
         "Points to security checklist"
       ]
+    },
+    {
+      "name": "node_security_tests",
+      "input": "What concrete security tests should I run on my Node + Firebase project before release?",
+      "assertions": [
+        "Mentions npm ci --ignore-scripts",
+        "Mentions npm audit",
+        "Mentions secrets scan or .env check",
+        "Mentions Firebase rules check for open rules",
+        "Points to node-firebase-security-tests or equivalent"
+      ]
+    },
+    {
+      "name": "firebase_emulator_rules",
+      "input": "How do I test Firestore security rules properly?",
+      "assertions": [
+        "Recommends Firebase Emulator or Rules Playground",
+        "Requires auth checks in rules",
+        "Rejects open rules"
+      ]
     }
   ]
 }
