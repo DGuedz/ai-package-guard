@@ -7,6 +7,10 @@
 # Env:
 #   AUDIT_BLOCKING=1      make `npm audit` findings (moderate+) block the gate
 #   GATE_EXCLUDE_DIRS     extra space-separated directory names to skip in scans
+#   GATE_CHECKS           space-separated subset of: install audit secrets env rules
+#                         (default: all). Example: GATE_CHECKS="secrets env"
+#   GATE_EXTRA_PATTERNS   file with extra secret regexes (POSIX ERE, one per line,
+#                         blank lines and lines starting with # are ignored)
 #
 # Output lines start with PASS / FAIL / WARN / SKIP and a check id, so CI and
 # tests can assert on specific checks. Secret VALUES are never printed, only
@@ -15,6 +19,18 @@
 set -uo pipefail
 
 TARGET="${1:-.}"
+CHECKS=" ${GATE_CHECKS:-install audit secrets env rules} "
+enabled() { case "$CHECKS" in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
+
+# Resolve the extra patterns file before cd, so relative paths work.
+EXTRA_PATTERNS_FILE=""
+if [ -n "${GATE_EXTRA_PATTERNS:-}" ]; then
+  if [ ! -f "$GATE_EXTRA_PATTERNS" ]; then
+    echo "FAIL usage: GATE_EXTRA_PATTERNS file '$GATE_EXTRA_PATTERNS' not found"
+    exit 1
+  fi
+  EXTRA_PATTERNS_FILE="$(cd "$(dirname "$GATE_EXTRA_PATTERNS")" && pwd)/$(basename "$GATE_EXTRA_PATTERNS")"
+fi
 if [ ! -d "$TARGET" ]; then
   echo "FAIL usage: '$TARGET' is not a directory"
   exit 1
@@ -37,7 +53,9 @@ echo "Target:  $(pwd)"
 echo "Started: $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
 # --- 1. Frozen install --------------------------------------------------------
-if [ -f package.json ]; then
+if ! enabled install; then
+  skip install "not selected"
+elif [ -f package.json ]; then
   if [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then
     if npm ci --ignore-scripts --no-audit --no-fund >/dev/null 2>&1; then
       pass install "npm ci --ignore-scripts succeeded"
@@ -52,7 +70,9 @@ else
 fi
 
 # --- 2. Audit -------------------------------------------------------------------
-if [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then
+if ! enabled audit; then
+  skip audit "not selected"
+elif [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then
   if npm audit --audit-level=moderate >/dev/null 2>&1; then
     pass audit "no moderate+ advisories"
   elif [ "${AUDIT_BLOCKING:-0}" = "1" ]; then
@@ -76,14 +96,23 @@ SECRET_PATTERNS=(
   'gh[pousr]_[A-Za-z0-9]{36}'
   'xox[abprs]-[A-Za-z0-9-]{10,}'
 )
+if [ -n "$EXTRA_PATTERNS_FILE" ]; then
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in ''|'#'*) continue ;; esac
+    SECRET_PATTERNS+=("$line")
+  done < "$EXTRA_PATTERNS_FILE"
+fi
 SECRET_HITS=""
 for p in "${SECRET_PATTERNS[@]}"; do
+  enabled secrets || break
   hits=$(grep -rnIE "${EXCLUDES[@]}" -e "$p" . 2>/dev/null | cut -d: -f1,2 || true)
   if [ -n "$hits" ]; then
     SECRET_HITS="$SECRET_HITS$hits"$'\n'
   fi
 done
-if [ -n "$SECRET_HITS" ]; then
+if ! enabled secrets; then
+  skip secrets "not selected"
+elif [ -n "$SECRET_HITS" ]; then
   while IFS= read -r loc; do
     [ -n "$loc" ] && fail secrets "possible credential at $loc"
   done <<< "$(printf '%s' "$SECRET_HITS" | sort -u)"
@@ -94,7 +123,9 @@ fi
 # --- 4. .env files must be ignored and untracked --------------------------------
 ENV_FILES=$(find . \( -name node_modules -o -name .git \) -prune -o -type f -name '.env*' -print 2>/dev/null \
   | grep -vE '\.(example|sample|template)$' || true)
-if [ -z "$ENV_FILES" ]; then
+if ! enabled env; then
+  skip env "not selected"
+elif [ -z "$ENV_FILES" ]; then
   skip env "no .env files"
 else
   IN_GIT=0
@@ -122,7 +153,9 @@ strip_comments() { sed -e 's#//.*$##' "$1"; }
 RULES_FILES=$(find . \( -name node_modules -o -name .git \) -prune -o -type f -name '*.rules' -print 2>/dev/null || true)
 DB_RULES_FILES=$(find . \( -name node_modules -o -name .git \) -prune -o -type f -name 'database.rules.json' -print 2>/dev/null || true)
 
-if [ -z "$RULES_FILES" ] && [ -z "$DB_RULES_FILES" ]; then
+if ! enabled rules; then
+  skip rules "not selected"
+elif [ -z "$RULES_FILES" ] && [ -z "$DB_RULES_FILES" ]; then
   skip rules "no Firebase rules files"
 else
   RULES_OK=1

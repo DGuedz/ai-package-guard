@@ -10,7 +10,7 @@
 |---|---|
 | `scripts/verify_packages.py` | Consulta npm ou PyPI (`--ecosystem pypi`). Risco alto se o pacote não existe; médio se tem menos de 30 dias, não lista repositório ou tem nome a 1 letra de um pacote popular (typosquat). Falha de rede vira `unknown` (não verificado), nunca "não existe". |
 | `scripts/lockfile_diff.py` | Compara dois `package-lock.json` (v2/v3): pacotes adicionados, removidos e alterados; sinaliza hash de integridade ausente ou trocado na mesma versão, origem fora do registry npm e scripts de instalação. |
-| `scripts/security-gate.sh [dir]` | `npm ci --ignore-scripts` (exige lockfile), `npm audit` (bloqueia com `AUDIT_BLOCKING=1`), busca de credenciais reais (chave privada, service account, AWS, GitHub, Stripe, Slack) sem imprimir o valor, `.env` fora do git e regras do Firebase abertas (`if true`, `allow` sem condição, modo de teste com data, `storage.rules`, `database.rules.json`). |
+| `scripts/security-gate.sh [dir]` | `npm ci --ignore-scripts` (exige lockfile), `npm audit` (bloqueia com `AUDIT_BLOCKING=1`), busca de credenciais reais (chave privada, service account, AWS, GitHub, Stripe, Slack) sem imprimir o valor, `.env` fora do git e regras do Firebase abertas (`if true`, `allow` sem condição, modo de teste com data, `storage.rules`, `database.rules.json`). `GATE_CHECKS="secrets env"` escolhe as checagens; `GATE_EXTRA_PATTERNS=arquivo` acrescenta padrões de segredo do projeto (uma regex por linha). |
 
 ## Prova (o que é testado e o que não é)
 

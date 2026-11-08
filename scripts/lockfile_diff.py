@@ -27,10 +27,15 @@ REGISTRY = "https://registry.npmjs.org/"
 
 def load_packages(path: str) -> Dict[str, Dict[str, Any]]:
     with open(path) as f:
-        data = json.load(f)
+        return load_packages_from(json.load(f), path)
+
+
+def load_packages_from(data: Dict[str, Any], label: str = "lockfile") -> Dict[str, Dict[str, Any]]:
     if "packages" not in data:
-        raise ValueError(f"{path}: lockfileVersion {data.get('lockfileVersion')} is not supported (need v2 or v3)")
-    return {k: v for k, v in data["packages"].items() if k}  # "" is the root project
+        raise ValueError(f"{label}: lockfileVersion {data.get('lockfileVersion')} is not supported (need v2 or v3)")
+    # Keep installed packages only: "" is the root project and keys without
+    # "node_modules/" are local workspace folders (no integrity, by design).
+    return {k: v for k, v in data["packages"].items() if "node_modules/" in k}
 
 
 def name_of(key: str) -> str:

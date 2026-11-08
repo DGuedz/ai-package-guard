@@ -233,14 +233,14 @@ def test_lockfile_diff_flags_risky_changes():
 HAS_NPM = shutil.which("npm") is not None
 
 
-def gate(files):
+def gate(files, **extra_env):
     """Build a throwaway project from {path: content}, run the gate, return (code, output)."""
     with tempfile.TemporaryDirectory() as d:
         for rel, content in files.items():
             p = Path(d, rel)
             p.parent.mkdir(parents=True, exist_ok=True)
             p.write_text(content)
-        env = dict(os.environ, AUDIT_BLOCKING="0")
+        env = dict(os.environ, AUDIT_BLOCKING="0", **extra_env)
         code, out, err = run(["bash", str(GATE), d], env=env)
     return code, out + err
 
@@ -357,6 +357,46 @@ def test_gate_env_not_ignored_fails():
     code, out = gate({".env": "STRIPE_KEY=placeholder\n", ".gitignore": "node_modules\n"})
     check(code == 1 and fails_check(out, "env"), ".env missing from .gitignore must fail", output=out[-800:])
     return {"exit_code": code}
+
+
+@test("gate")
+def test_gate_check_selection():
+    aws = "AKIA" + "IOSFODNN7EXAMPLE"
+    files = {"package.json": "{}", "a.ts": f"const k = '{aws}';\n"}
+    code, out = gate(files, GATE_CHECKS="secrets")
+    check(code == 1 and fails_check(out, "secrets") and "SKIP install: not selected" in out,
+          "only the selected checks must run", output=out[-800:])
+    code, out = gate(files, GATE_CHECKS="env")
+    check(code == 0 and "SKIP secrets: not selected" in out, "unselected secret scan must not fail", output=out[-800:])
+    return {"exit_code": code}
+
+
+@test("gate")
+def test_gate_extra_patterns_file():
+    with tempfile.TemporaryDirectory() as d:
+        pat = Path(d, "patterns.txt")
+        pat.write_text("# project-specific\n\nACME_[A-Z0-9]{12}\n")
+        token = "ACME_" + "ABCDEF123456"
+        code, out = gate({"src/x.js": f"t = '{token}'\n"}, GATE_EXTRA_PATTERNS=str(pat))
+        base_code, _ = gate({"src/x.js": f"t = '{token}'\n"})
+    check(code == 1 and fails_check(out, "secrets") and token not in out, "extra pattern must be enforced", output=out[-800:])
+    check(base_code == 0, "without the file the custom token is not a known format")
+    code, out = gate({}, GATE_EXTRA_PATTERNS="/nonexistent/patterns.txt")
+    check(code == 1 and "not found" in out, "missing patterns file must fail loudly")
+    return {"exit_code": code}
+
+
+@test("offline")
+def test_lockfile_diff_ignores_workspaces():
+    base = _lock({"packages/db": {"name": "@x/db", "version": "0.1.0"},
+                  "node_modules/@x/db": {"resolved": "packages/db", "link": True}})
+    head = _lock({"packages/db": {"name": "@x/db", "version": "0.2.0"},
+                  "apps/web": {"name": "@x/web", "version": "0.1.0"},
+                  "node_modules/@x/db": {"resolved": "packages/db", "link": True},
+                  "node_modules/@x/web": {"resolved": "apps/web", "link": True}})
+    rep = ld.diff(ld.load_packages_from(base), ld.load_packages_from(head))
+    check(rep["summary"]["flagged"] == 0, "workspace folders and links must not be flagged", report=rep)
+    return {"summary": rep["summary"]}
 
 
 # --------------------------------------------------------------------------- structure
