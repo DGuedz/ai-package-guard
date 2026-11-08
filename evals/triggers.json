@@ -14,11 +14,23 @@
       "should_trigger": true
     },
     {
+      "input": "Verify this package before I add it: express",
+      "should_trigger": true
+    },
+    {
+      "input": "Generate SBOM and review lockfile for the PR",
+      "should_trigger": true
+    },
+    {
       "input": "What's the weather today?",
       "should_trigger": false
     },
     {
       "input": "Write a React component for a button",
+      "should_trigger": false
+    },
+    {
+      "input": "Explain how React hooks work",
       "should_trigger": false
     }
   ]
