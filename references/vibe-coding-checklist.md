@@ -35,6 +35,7 @@ Crosses the mentor’s advice (Geraldo Alvês) with the `ai-package-guard` workf
 - [ ] No secrets in source or logs.
 - [ ] Input validation on any Cloud Function or API route.
 - [ ] Rate limiting or App Check on public endpoints.
+- [ ] Node & Firebase security tests from `references/node-firebase-security-tests.md` executed.
 
 ## 5. Recurring Security Testing (mentor’s advice)
 
