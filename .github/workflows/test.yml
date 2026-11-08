@@ -1,0 +1,51 @@
+name: Skill Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Run skill tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run test suite
+        run: python evals/run_tests.py
+
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report
+          path: evals/test-report.json
+          retention-days: 30
+
+      - name: Test summary
+        if: always()
+        run: |
+          echo "### Skill Test Results" >> $GITHUB_STEP_SUMMARY
+          if [ -f evals/test-report.json ]; then
+            python -c "
+          import json
+          with open('evals/test-report.json') as f:
+              r = json.load(f)
+          s = r['summary']
+          print(f'- Passed: {s[\"passed\"]}/{s[\"total\"]}')
+          print(f'- Success: {s[\"success\"]}')
+          print(f'- Started: {r[\"started_at\"]}')
+          print(f'- Finished: {s[\"finished_at\"]}')
+          " >> $GITHUB_STEP_SUMMARY
+          else
+            echo "No report generated" >> $GITHUB_STEP_SUMMARY
+          fi
